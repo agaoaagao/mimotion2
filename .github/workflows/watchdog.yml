@@ -1,0 +1,24 @@
+name: Watchdog
+
+on:
+  schedule:
+    - cron: '7,27,47 * * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check last success and dispatch if stale
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+        run: |
+          last=$(gh api repos/${{ github.repository }}/actions/workflows/run.yml/runs \
+            --jq '[.workflow_runs[] | select(.conclusion=="success")][0].created_at')
+          echo "last success: $last"
+          hours=$(( ($(date +%s) - $(date -d "$last" +%s)) / 3600 ))
+          if [ $hours -ge 3 ]; then
+            echo "stale ${hours}h, dispatching run.yml..."
+            gh api -X POST repos/${{ github.repository }}/actions/workflows/run.yml/dispatches \
+              -f ref=master
+          fi
